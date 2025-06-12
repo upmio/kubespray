@@ -101,12 +101,6 @@ $extra_vars ||= {}                             # Additional Ansible variables
 # Security Configuration
 $vagrant_pwd ||= ENV['VAGRANT_PASSWORD'] || SecureRandom.hex(8)  # Vagrant user password
 
-# Proxy Configuration
-$http_proxy ||= ENV['KUBESPRAY_HTTP_PROXY'] || ""     # HTTP proxy URL
-$https_proxy ||= ENV['KUBESPRAY_HTTPS_PROXY'] || ""   # HTTPS proxy URL
-$no_proxy ||= ENV['KUBESPRAY_NO_PROXY'] || ""         # No proxy list
-$additional_no_proxy ||= ENV['KUBESPRAY_ADDITIONAL_NO_PROXY'] || ""  # Additional no proxy entries
-
 # Directory Configuration
 $shared_folders ||= {}                         # Additional shared folders
 $forwarded_ports ||= {}                        # Port forwarding configuration
@@ -141,19 +135,6 @@ def validate_configuration
   # Validate network configuration
   unless ["private_network", "public_network"].include?($vm_network)
     puts "ERROR: Invalid network type: #{$vm_network}. Must be 'private_network' or 'public_network'"
-    exit 1
-  end
-  
-  # Validate proxy configuration
-  if !$http_proxy.empty? && !$http_proxy.match(/^https?:\/\/.+/)
-    puts "\n❌ Error: Invalid HTTP proxy format '#{$http_proxy}'"
-    puts "Expected format: http://proxy.example.com:8080"
-    exit 1
-  end
-  
-  if !$https_proxy.empty? && !$https_proxy.match(/^https?:\/\/.+/)
-    puts "\n❌ Error: Invalid HTTPS proxy format '#{$https_proxy}'"
-    puts "Expected format: http://proxy.example.com:8080"
     exit 1
   end
 end
@@ -264,17 +245,9 @@ def configure_ansible_provisioner(node, host_vars)
     
     # Set host variables and extra variables
     ansible.host_vars = host_vars
-    
-    # Prepare proxy configuration for Ansible
-    proxy_vars = {}
-    proxy_vars['http_proxy'] = $http_proxy unless $http_proxy.empty?
-    proxy_vars['https_proxy'] = $https_proxy unless $https_proxy.empty?
-    proxy_vars['no_proxy'] = $no_proxy unless $no_proxy.empty?
-    proxy_vars['additional_no_proxy'] = $additional_no_proxy unless $additional_no_proxy.empty?
-    
     ansible.extra_vars = ($extra_vars || {}).merge({
       'ansible_python_interpreter' => '/usr/bin/python3'
-    }).merge(proxy_vars)
+    })
     
     # Apply Ansible tags if specified
     ansible.tags = [$ansible_tags] unless $ansible_tags.empty?
@@ -309,22 +282,9 @@ Vagrant.configure("2") do |config|
     config.vm.define vm_name = "%s-%01d" % [$instance_name_prefix, i] do |node|
       node.vm.hostname = vm_name
       if Vagrant.has_plugin?("vagrant-proxyconf")
-        node.proxy.http     = $http_proxy.empty? ? (ENV['HTTP_PROXY'] || ENV['http_proxy'] || "") : $http_proxy
-        node.proxy.https    = $https_proxy.empty? ? (ENV['HTTPS_PROXY'] || ENV['https_proxy'] || "") : $https_proxy
-        
-        # Combine no_proxy and additional_no_proxy
-        combined_no_proxy = $no_proxy
-        unless $additional_no_proxy.empty?
-          combined_no_proxy = combined_no_proxy.empty? ? $additional_no_proxy : "#{combined_no_proxy},#{$additional_no_proxy}"
-        end
-        
-        # Add VM IPs to no_proxy list if not already included
-        vm_no_proxy = "#{$subnet}.#{i+$subnet_split4}"
-        unless combined_no_proxy.include?(vm_no_proxy)
-          combined_no_proxy = combined_no_proxy.empty? ? vm_no_proxy : "#{combined_no_proxy},#{vm_no_proxy}"
-        end
-        
-        node.proxy.no_proxy = combined_no_proxy
+        node.proxy.http     = ENV['HTTP_PROXY'] || ENV['http_proxy'] || ""
+        node.proxy.https    = ENV['HTTPS_PROXY'] || ENV['https_proxy'] ||  ""
+        node.proxy.no_proxy = $no_proxy
       end
 
       # Determine VM resources based on node type
