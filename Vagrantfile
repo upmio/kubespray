@@ -1,7 +1,7 @@
 # -*- mode: ruby -*-
 # # vi: set ft=ruby :
 
-# For help on using kubespray with vagrant, check out docs/developers/vagrant.md
+# For help on using kubespray with vagrant, check out docs/vagrant.md
 
 require 'fileutils'
 
@@ -9,94 +9,81 @@ Vagrant.require_version ">= 2.0.0"
 
 CONFIG = File.join(File.dirname(__FILE__), ENV['KUBESPRAY_VAGRANT_CONFIG'] || 'vagrant/config.rb')
 
-FLATCAR_URL_TEMPLATE = "https://%s.release.flatcar-linux.net/amd64-usr/current/flatcar_production_vagrant.json"
-
-# Uniq disk UUID for libvirt
-DISK_UUID = Time.now.utc.to_i
-
 SUPPORTED_OS = {
-  "flatcar-stable"      => {box: "flatcar-stable",             user: "core", box_url: FLATCAR_URL_TEMPLATE % ["stable"]},
-  "flatcar-beta"        => {box: "flatcar-beta",               user: "core", box_url: FLATCAR_URL_TEMPLATE % ["beta"]},
-  "flatcar-alpha"       => {box: "flatcar-alpha",              user: "core", box_url: FLATCAR_URL_TEMPLATE % ["alpha"]},
-  "flatcar-edge"        => {box: "flatcar-edge",               user: "core", box_url: FLATCAR_URL_TEMPLATE % ["edge"]},
-  "ubuntu2004"          => {box: "generic/ubuntu2004",         user: "vagrant"},
   "ubuntu2204"          => {box: "generic/ubuntu2204",         user: "vagrant"},
   "ubuntu2404"          => {box: "bento/ubuntu-24.04",         user: "vagrant"},
-  "centos8"             => {box: "centos/8",                   user: "vagrant"},
-  "centos8-bento"       => {box: "bento/centos-8",             user: "vagrant"},
-  "almalinux8"          => {box: "almalinux/8",                user: "vagrant"},
-  "almalinux8-bento"    => {box: "bento/almalinux-8",          user: "vagrant"},
-  "almalinux9"          => {box: "almalinux/9",                user: "vagrant"},
-  "rockylinux8"         => {box: "rockylinux/8",               user: "vagrant"},
-  "rockylinux9"         => {box: "rockylinux/9",               user: "vagrant"},
-  "fedora39"            => {box: "fedora/39-cloud-base",       user: "vagrant"},
-  "fedora40"            => {box: "fedora/40-cloud-base",       user: "vagrant"},
-  "fedora39-arm64"      => {box: "bento/fedora-39-arm64",      user: "vagrant"},
-  "fedora40-arm64"      => {box: "bento/fedora-40",            user: "vagrant"},
-  "opensuse"            => {box: "opensuse/Leap-15.6.x86_64",  user: "vagrant"},
+  "rockylinux8"         => {box: "bento/rockylinux-8",         user: "vagrant"},
+  "rockylinux9"         => {box: "bento/rockylinux-9",         user: "vagrant"},
+  "opensuse"            => {box: "opensuse/Leap-15.4.x86_64",  user: "vagrant"},
   "opensuse-tumbleweed" => {box: "opensuse/Tumbleweed.x86_64", user: "vagrant"},
-  "oraclelinux"         => {box: "generic/oracle7",            user: "vagrant"},
   "oraclelinux8"        => {box: "generic/oracle8",            user: "vagrant"},
   "rhel8"               => {box: "generic/rhel8",              user: "vagrant"},
-  "debian11"            => {box: "debian/bullseye64",          user: "vagrant"},
-  "debian12"            => {box: "debian/bookworm64",          user: "vagrant"},
 }
 
-if File.exist?(CONFIG)
-  require CONFIG
+begin
+  require CONFIG if File.exist?(CONFIG)
+rescue => e
+  puts "Error loading config file #{CONFIG}: #{e.message}"
+  exit 1
 end
 
 # Defaults for config options defined in CONFIG
 $num_instances ||= 3
 $instance_name_prefix ||= "k8s"
 $vm_gui ||= false
-$vm_memory ||= 2048
-$vm_cpus ||= 2
+$vm_memory ||= 16384
+$vm_cpus ||= 8
+$vm_network ||= "private_network"
+$kube_master_vm_memory ||= 4096
+$kube_master_vm_cpus ||= 4
+$upm_control_plane_vm_memory ||= 32768
+$upm_control_plane_vm_cpus ||= 8
 $shared_folders ||= {}
 $forwarded_ports ||= {}
 $subnet ||= "172.18.8"
+$subnet_split4 ||=100
 $subnet_ipv6 ||= "fd3c:b398:0698:0756"
-$os ||= "ubuntu2004"
-$network_plugin ||= "flannel"
-$inventories ||= []
+$netmask ||= "255.255.255.0"
+$gateway ||= "172.18.8.1"
+$dns_server ||= "8.8.8.8"
+$bridge_nic ||= "en0" # 当是public_network时，这里填写网卡名称，如"en0"
+$time_zone ||= "Asia/Shanghai"
+$os ||= "rockylinux9"
+$network_plugin ||= "calico"
 # Setting multi_networking to true will install Multus: https://github.com/k8snetworkplumbingwg/multus-cni
 $multi_networking ||= "False"
 $download_run_once ||= "True"
 $download_force_cache ||= "False"
-# Modify those to have separate groups (for instance, to test separate etcd:)
-# first_control_plane = 1
-# first_etcd = 4
-# control_plane_instances = 3
-# etcd_instances = 3
-$first_node ||= 1
-$first_control_plane ||= 1
-$first_etcd ||= 1
-
+$kube_version ||= "1.32.5"
 # The first three nodes are etcd servers
 $etcd_instances ||= [$num_instances, 3].min
 # The first two nodes are kube masters
-$control_plane_instances ||= [$num_instances, 2].min
+$kube_master_instances ||= [$num_instances, 2].min
 # All nodes are kube nodes
-$kube_node_instances ||= $num_instances - $first_node + 1
-
+$kube_node_instances ||= $num_instances
+# UPM controller nodes
+$upm_ctl_instances ||= 1
 # The following only works when using the libvirt provider
 $kube_node_instances_with_disks ||= false
 $kube_node_instances_with_disks_size ||= "20G"
 $kube_node_instances_with_disks_number ||= 2
-$override_disk_size ||= false
-$disk_size ||= "20GB"
+$kube_node_instances_with_disk_dir ||= ENV['HOME']
+$kube_node_instances_with_disk_suffix ||= 'xxxxxxxx'
 $local_path_provisioner_enabled ||= "False"
 $local_path_provisioner_claim_root ||= "/opt/local-path-provisioner/"
 $libvirt_nested ||= false
 # boolean or string (e.g. "-vvv")
 $ansible_verbosity ||= false
 $ansible_tags ||= ENV['VAGRANT_ANSIBLE_TAGS'] || ""
+$provider ||= ENV['VAGRANT_DEFAULT_PROVIDER'] || ""
 
+$vagrant_pwd ||= ENV['VAGRANT_PASSWORD'] || SecureRandom.hex(8)
 $vagrant_dir ||= File.join(File.dirname(__FILE__), ".vagrant")
 
 $playbook ||= "cluster.yml"
 $extra_vars ||= {}
 
+node_instances_begin = [$etcd_instances, $kube_master_instances].max
 host_vars = {}
 
 # throw error if os is not supported
@@ -107,11 +94,24 @@ if ! SUPPORTED_OS.key?($os)
 end
 
 $box = SUPPORTED_OS[$os][:box]
+# if $inventory is not set, try to use example
+$inventory = "inventory/sample" if ! $inventory
+$inventory = File.absolute_path($inventory, File.dirname(__FILE__))
+
+# if $inventory has a hosts.ini file use it, otherwise copy over
+# vars etc to where vagrant expects dynamic inventory to be
+if ! File.exist?(File.join(File.dirname($inventory), "hosts.ini"))
+  $vagrant_ansible = File.join(File.absolute_path($vagrant_dir), "provisioners", "ansible")
+  FileUtils.mkdir_p($vagrant_ansible) if ! File.exist?($vagrant_ansible)
+  $vagrant_inventory = File.join($vagrant_ansible,"inventory")
+  FileUtils.rm_f($vagrant_inventory)
+  FileUtils.ln_s($inventory, $vagrant_inventory)
+end
 
 if Vagrant.has_plugin?("vagrant-proxyconf")
-  $no_proxy = ENV['NO_PROXY'] || ENV['no_proxy'] || "127.0.0.1,localhost"
+  $no_proxy = ENV['NO_PROXY'] || ENV['no_proxy'] || "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,::1,.bsgchina.com"
   (1..$num_instances).each do |i|
-      $no_proxy += ",#{$subnet}.#{i+100}"
+    $no_proxy += ",#{$subnet}.#{i+$subnet_split4}"
   end
 end
 
@@ -131,34 +131,44 @@ Vagrant.configure("2") do |config|
   # always use Vagrants insecure key
   config.ssh.insert_key = false
 
-  if ($override_disk_size)
-    unless Vagrant.has_plugin?("vagrant-disksize")
-      system "vagrant plugin install vagrant-disksize"
-    end
-    config.disksize.size = $disk_size
-  end
-
   (1..$num_instances).each do |i|
     config.vm.define vm_name = "%s-%01d" % [$instance_name_prefix, i] do |node|
-
       node.vm.hostname = vm_name
-
       if Vagrant.has_plugin?("vagrant-proxyconf")
         node.proxy.http     = ENV['HTTP_PROXY'] || ENV['http_proxy'] || ""
         node.proxy.https    = ENV['HTTPS_PROXY'] || ENV['https_proxy'] ||  ""
         node.proxy.no_proxy = $no_proxy
       end
 
+      if i <= node_instances_begin
+        memory_size = "#{$kube_master_vm_memory}"
+        cpu_num = "#{$kube_master_vm_cpus}"
+      elsif i > node_instances_begin && i <= node_instances_begin + $upm_ctl_instances
+        memory_size = "#{$upm_control_plane_vm_memory}"
+        cpu_num = "#{$upm_control_plane_vm_cpus}"
+      else
+        memory_size = "#{$vm_memory}"
+        cpu_num = "#{$vm_cpus}"
+      end
+
       ["vmware_fusion", "vmware_workstation"].each do |vmware|
         node.vm.provider vmware do |v|
-          v.vmx['memsize'] = $vm_memory
-          v.vmx['numvcpus'] = $vm_cpus
+          v.vmx['memsize'] = memory_size
+          v.vmx['numvcpus'] = cpu_num
         end
       end
 
+      node.vm.provider "parallels" do |prl|
+        prl.memory = memory_size
+        prl.cpus = cpu_num
+        prl.linked_clone = true
+        prl.update_guest_tools = false
+        prl.check_guest_tools = false
+      end
+
       node.vm.provider :virtualbox do |vb|
-        vb.memory = $vm_memory
-        vb.cpus = $vm_cpus
+        vb.memory = memory_size
+        vb.cpus = cpu_num
         vb.gui = $vm_gui
         vb.linked_clone = true
         vb.customize ["modifyvm", :id, "--vram", "8"] # ubuntu defaults to 256 MB which is a waste of precious RAM
@@ -168,8 +178,8 @@ Vagrant.configure("2") do |config|
       node.vm.provider :libvirt do |lv|
         lv.nested = $libvirt_nested
         lv.cpu_mode = "host-model"
-        lv.memory = $vm_memory
-        lv.cpus = $vm_cpus
+        lv.memory = memory_size
+        lv.cpus = cpu_num
         lv.default_prefix = 'kubespray'
         # Fix kernel panic on fedora 28
         if $os == "fedora"
@@ -177,28 +187,37 @@ Vagrant.configure("2") do |config|
         end
       end
 
-      if $kube_node_instances_with_disks
+      if $kube_node_instances_with_disks && i > node_instances_begin
+        # install lvm2 package
+        node.vm.provision "shell", inline: "sudo dnf install -y lvm2"
         # Libvirt
         driverletters = ('a'..'z').to_a
+        disk_dir = "#{$kube_node_instances_with_disk_dir}"
         node.vm.provider :libvirt do |lv|
           # always make /dev/sd{a/b/c} so that CI can ensure that
           # virtualbox and libvirt will have the same devices to use for OSDs
           (1..$kube_node_instances_with_disks_number).each do |d|
-            lv.storage :file, :device => "hd#{driverletters[d]}", :path => "disk-#{i}-#{d}-#{DISK_UUID}.disk", :size => $kube_node_instances_with_disks_size, :bus => "scsi"
+            disk_path = "#{disk_dir}/disk-#{i}-#{driverletters[d]}-#{$kube_node_instances_with_disk_suffix}.disk"
+            lv.storage :file, :device => "hd#{driverletters[d]}", :path => disk_path, :size => $kube_node_instances_with_disks_size, :bus => "scsi"
           end
         end
         node.vm.provider :virtualbox do |vb|
           # always make /dev/sd{a/b/c} so that CI can ensure that
           # virtualbox and libvirt will have the same devices to use for OSDs
           (1..$kube_node_instances_with_disks_number).each do |d|
-            vb.customize ['createhd', '--filename', "disk-#{i}-#{driverletters[d]}-#{DISK_UUID}.disk", '--size', $kube_node_instances_with_disks_size] # 10GB disk
-            vb.customize ['storageattach', :id, '--storagectl', 'SATA Controller', '--port', d, '--device', 0, '--type', 'hdd', '--medium', "disk-#{i}-#{driverletters[d]}-#{DISK_UUID}.disk", '--nonrotational', 'on', '--mtype', 'normal']
+            disk_path = "#{disk_dir}/disk-#{i}-#{driverletters[d]}-#{$kube_node_instances_with_disk_suffix}.disk"
+            if !File.exist?(disk_path)
+              vb.customize ['createhd', '--filename', disk_path, '--size', $kube_node_instances_with_disks_size] # 10GB disk
+            end
+            vb.customize ['storageattach', :id, '--storagectl', 'SATA Controller', '--port', d, '--device', 0, '--type', 'hdd', '--medium', disk_path, '--nonrotational', 'on', '--mtype', 'normal']
           end
         end
-      end
 
-      if $expose_docker_tcp
-        node.vm.network "forwarded_port", guest: 2375, host: ($expose_docker_tcp + i - 1), auto_correct: true
+        node.vm.provider :parallels do |prl|
+          (1..$kube_node_instances_with_disks_number).each do |d|
+            prl.customize ['set', :id, '--device-add', 'hdd', '--iface', 'nvme', '--size', $kube_node_instances_with_disks_size, '--type', 'expand']
+          end
+        end
       end
 
       $forwarded_ports.each do |guest, host|
@@ -219,38 +238,115 @@ Vagrant.configure("2") do |config|
         end
       end
 
-      ip = "#{$subnet}.#{i+100}"
-      ip6 = "#{$subnet_ipv6}::#{i+100}"
-      node.vm.network :private_network,
-        :ip => ip,
-        :libvirt__guest_ipv6 => 'yes',
-        :libvirt__ipv6_address => ip6,
-        :libvirt__ipv6_prefix => "64",
-        :libvirt__forward_mode => "none",
-        :libvirt__dhcp_enabled => false
+      ip = "#{$subnet}.#{i+$subnet_split4}"
+      if $vm_network == "public_network"
+        node.vm.network :public_network,
+          :ip => ip,
+          :netmask => $netmask,
+          :bridge => $bridge_nic,
+          :libvirt__guest_ipv6 => 'yes',
+          :libvirt__ipv6_address => "#{$subnet_ipv6}::#{i+100}",
+          :libvirt__ipv6_prefix => "64",
+          :libvirt__forward_mode => "none",
+          :libvirt__dhcp_enabled => false
+        if ["rockylinux8","rockylinux9"].include? $os
+          # Set default gateway
+          node.vm.provision "shell", inline: <<-SHELL
+            sudo nmcli connection modify "eth0" ipv4.gateway ""
+            sudo nmcli connection modify "eth0" ipv4.never-default yes
+            sudo nmcli connection modify "System eth1" +ipv4.routes "0.0.0.0/0 #{$gateway}"
+            sudo nmcli connection modify "System eth1" ipv4.gateway "#{$gateway}"
+            sudo nmcli connection up "eth0"
+            sudo nmcli connection up "System eth1"
+            sudo echo -e "[main]\ndns=default\n\n[global-dns-domain-*]\nservers=#{$dns_server}" | sudo tee /etc/NetworkManager/conf.d/dns.conf
+            sudo systemctl restart NetworkManager
+          SHELL
+        end
+      else $vm_network == "private_network"
+        node.vm.network :private_network,
+          :ip => ip,
+          :netmask => $netmask,
+          :libvirt__guest_ipv6 => 'yes',
+          :libvirt__ipv6_address => "#{$subnet_ipv6}::#{i+100}",
+          :libvirt__ipv6_prefix => "64",
+          :libvirt__forward_mode => "none",
+          :libvirt__dhcp_enabled => false
+        if ["rockylinux8","rockylinux9"].include? $os
+        # Set default gateway
+          node.vm.provision "shell", inline: <<-SHELL
+            sudo nmcli connection modify "System eth1" ipv4.gateway "#{$gateway}"
+            sudo nmcli connection up "System eth1"
+            sudo echo -e "[main]\ndns=default\n\n[global-dns-domain-*]\nservers=#{$dns_server}" | sudo tee /etc/NetworkManager/conf.d/dns.conf
+            sudo systemctl restart NetworkManager
+          SHELL
+        end
+      end
 
-      # libvirt__ipv6_address does not work as intended, the address is obtained with the desired prefix, but auto-generated(like fd3c:b398:698:756:5054:ff:fe48:c61e/64)
-      # add default route for detect ansible_default_ipv6
-      # TODO: fix libvirt__ipv6 or use $subnet in shell
-      config.vm.provision "shell", inline: "ip -6 r a fd3c:b398:698:756::/64 dev eth1;ip -6 r add default via fd3c:b398:0698:0756::1 dev eth1 || true"
+      # if provider = virtualbox , set ethtool -K net device tx-checksum-ip-generic off
+      if $provider == "virtualbox"
+        if ["rockylinux8","rockylinux9"].include? $os
+          node.vm.provision "shell", inline: <<-SHELL
+            sudo ethtool -K eth0 tx-checksum-ip-generic off
+            sudo ethtool -K eth1 tx-checksum-ip-generic off
+            sudo nmcli conn modify eth0 ethtool.feature-tx-checksum-ip-generic off
+            sudo nmcli conn modify 'System eth1' ethtool.feature-tx-checksum-ip-generic off
+          SHELL
+        end
+      end
 
       # Disable swap for each vm
       node.vm.provision "shell", inline: "swapoff -a"
 
+      # Set password for vagrant user
+      node.vm.provision "shell", inline: "echo 'vagrant:#{$vagrant_pwd}' | sudo chpasswd"
+
+      # Setup Python for Ansible and common CLI tool symlinks
+      node.vm.provision "shell", privileged: true, inline: <<-SHELL
+        echo "INFO: Starting Python and CLI tools setup..."
+
+        # Install Python 3 and pip
+        echo "INFO: Installing Python 3 and pip..."
+        if command -v dnf &> /dev/null; then
+          dnf install -y python3 python3-pip
+        elif command -v apt-get &> /dev/null; then
+          apt-get install -y python3 python3-pip
+        elif command -v zypper &> /dev/null; then
+          zypper install -y python3 python3-pip
+        else
+          echo "ERROR: Unsupported package manager. Cannot install Python3."
+        fi
+        echo "INFO: Python 3 and pip installation attempt finished."
+
+        # Provide /usr/bin/python for Ansible if not present and python3 exists
+        echo "INFO: Configuring /usr/bin/python symlink..."
+        if ! command -v python &> /dev/null && command -v python3 &> /dev/null; then
+          PYTHON3_PATH_DETECTED=$(command -v python3)
+          echo "INFO: Linking $PYTHON3_PATH_DETECTED to /usr/bin/python"
+          ln -s $PYTHON3_PATH_DETECTED /usr/bin/python
+        else
+          if command -v python &> /dev/null; then
+            echo "INFO: /usr/bin/python already exists ($(command -v python)). Skipping symlink."
+          else
+            echo "INFO: python3 not found. Skipping /usr/bin/python symlink."
+          fi
+        fi
+
+        # Symlink common K8s CLI tools
+        echo "INFO: Symlinking K8s CLI tools..."
+        TOOLS_TO_LINK=("kubectl" "helm" "nerdctl" "crictl")
+        for tool in "${TOOLS_TO_LINK[@]}"; do
+          SOURCE_TOOL="/usr/local/bin/$tool"
+          TARGET_TOOL="/usr/bin/$tool"
+          echo "INFO: Linking $SOURCE_TOOL to $TARGET_TOOL"
+          ln -sf "$SOURCE_TOOL" "$TARGET_TOOL" # Force symlink
+        done
+        echo "INFO: Python and CLI tools setup finished."
+      SHELL
       # ubuntu2004 and ubuntu2204 have IPv6 explicitly disabled. This undoes that.
-      if ["ubuntu2004", "ubuntu2204"].include? $os
+      if ["ubuntu2204"].include? $os
         node.vm.provision "shell", inline: "rm -f /etc/modprobe.d/local.conf"
         node.vm.provision "shell", inline: "sed -i '/net.ipv6.conf.all.disable_ipv6/d' /etc/sysctl.d/99-sysctl.conf /etc/sysctl.conf"
       end
-      # Hack for fedora39/40 to get the IP address of the second interface
-      if ["fedora39", "fedora40", "fedora39-arm64", "fedora40-arm64"].include? $os
-        config.vm.provision "shell", inline: <<-SHELL
-          nmcli conn modify 'Wired connection 2' ipv4.addresses $(cat /etc/sysconfig/network-scripts/ifcfg-eth1 | grep IPADDR | cut -d "=" -f2)/24
-          nmcli conn modify 'Wired connection 2' ipv4.method manual
-          service NetworkManager restart
-        SHELL
-      end
-
 
       # Rockylinux boxes needs UEFI
       if ["rockylinux8", "rockylinux9"].include? $os
@@ -259,14 +355,16 @@ Vagrant.configure("2") do |config|
         end
       end
 
-      # Disable firewalld on oraclelinux/redhat vms
-      if ["oraclelinux","oraclelinux8", "rhel8","rockylinux8"].include? $os
+      # Disable firewalld on oraclelinux/redhat/rocky vms
+      if ["oraclelinux","oraclelinux8","rhel7","rhel8","rockylinux8","rockylinux9"].include? $os
         node.vm.provision "shell", inline: "systemctl stop firewalld; systemctl disable firewalld"
       end
 
+      # Set timezone
+      node.vm.provision "shell", inline: "timedatectl set-timezone #{$time_zone}"
+
       host_vars[vm_name] = {
         "ip": ip,
-        "flannel_interface": "eth1",
         "kube_network_plugin": $network_plugin,
         "kube_network_plugin_multus": $multi_networking,
         "download_run_once": $download_run_once,
@@ -282,9 +380,12 @@ Vagrant.configure("2") do |config|
         "kubectl_localhost": "True",
         "local_path_provisioner_enabled": "#{$local_path_provisioner_enabled}",
         "local_path_provisioner_claim_root": "#{$local_path_provisioner_claim_root}",
+        "helm_enabled": "True",
         "ansible_ssh_user": SUPPORTED_OS[$os][:user],
         "ansible_ssh_private_key_file": File.join(Dir.home, ".vagrant.d", "insecure_private_key"),
-        "unsafe_show_logs": "True"
+        "unsafe_show_logs": "True",
+        "preinstall_selinux_state": "disabled",
+        "kube_version": "#{$kube_version}"
       }
 
       # Only execute the Ansible provisioner once, when all the machines are up and ready.
@@ -294,27 +395,27 @@ Vagrant.configure("2") do |config|
           ansible.playbook = $playbook
           ansible.compatibility_mode = "2.0"
           ansible.verbose = $ansible_verbosity
+          $ansible_inventory_path = File.join( $inventory, "hosts.ini")
+          if File.exist?($ansible_inventory_path)
+            ansible.inventory_path = $ansible_inventory_path
+          end
           ansible.become = true
           ansible.limit = "all,localhost"
           ansible.host_key_checking = false
-          ansible.raw_arguments = ["--forks=#{$num_instances}",
-                                   "--flush-cache",
-                                   "-e ansible_become_pass=vagrant"] +
-                                   $inventories.map {|inv| ["-i", inv]}.flatten
+          ansible.raw_arguments = ["--forks=#{$num_instances}", "--flush-cache", "-e ansible_become_pass=vagrant"]
           ansible.host_vars = host_vars
-          ansible.extra_vars = $extra_vars
+          ansible.extra_vars = ($extra_vars || {}).merge({'ansible_python_interpreter': '/usr/bin/python3'})
           if $ansible_tags != ""
             ansible.tags = [$ansible_tags]
           end
           ansible.groups = {
-            "etcd" => ["#{$instance_name_prefix}-[#{$first_etcd}:#{$etcd_instances + $first_etcd - 1}]"],
-            "kube_control_plane" => ["#{$instance_name_prefix}-[#{$first_control_plane}:#{$control_plane_instances + $first_control_plane - 1}]"],
-            "kube_node" => ["#{$instance_name_prefix}-[#{$first_node}:#{$kube_node_instances + $first_node - 1}]"],
+            "etcd" => ["#{$instance_name_prefix}-[1:#{$etcd_instances}]"],
+            "kube_control_plane" => ["#{$instance_name_prefix}-[1:#{$kube_master_instances}]"],
+            "kube_node" => ["#{$instance_name_prefix}-[1:#{$kube_node_instances}]"],
             "k8s_cluster:children" => ["kube_control_plane", "kube_node"],
           }
         end
       end
-
     end
   end
 end
