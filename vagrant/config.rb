@@ -1,0 +1,37 @@
+#$ansible_verbosity = "vvv"
+$instance_name_prefix = "k8s"
+$vm_cpus = 8
+$vm_memory = 16384
+$kube_master_vm_cpus = 4
+$kube_master_vm_memory = 4096
+$upm_control_plane_vm_cpus = 8
+$upm_control_plane_vm_memory = 8192
+$kube_node_instances_with_disks = true
+$kube_node_instances_with_disks_size = 204800
+$kube_node_instances_with_disks_number = 1
+$kube_node_instances_with_disk_dir = ENV['HOME'] + "/VirtualBox/upm_disks"
+$kube_node_instances_with_disk_suffix = "upm"
+$num_instances = 5
+$etcd_instances = 1
+$kube_master_instances = 1
+$upm_ctl_instances = 1
+$time_zone = "Asia/Shanghai"
+$os = "rockylinux9"
+$vm_network = "private_network" # 这里可以填写以下值："private_network", "public_network"
+$subnet = "10.37.129"
+$subnet_split4 = 100
+$netmask = "255.255.255.0"
+$gateway = "10.37.129.1"
+$dns_server = "8.8.8.8"
+$bridge_nic = "" # 当是public_network时，这里填写网卡名称，如"en0"
+$network_plugin = "calico"
+$multi_networking = "False"
+#$inventory = "inventory/sample"
+$shared_folders = {}
+$kube_version = "1.33.1"
+
+# Proxy configuration (uncomment and configure as needed)
+# $http_proxy = "http://proxy.example.com:8080"
+# $https_proxy = "http://proxy.example.com:8080"
+# $no_proxy = "localhost,127.0.0.1,.local"
+# $additional_no_proxy = "10.0.0.0/8,192.168.0.0/16"
