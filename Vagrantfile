@@ -70,6 +70,10 @@ $bridge_nic ||= "en0"                          # Bridge network interface for pu
 $time_zone ||= "Asia/Shanghai"                 # System timezone
 $os ||= "rockylinux9"                          # Default operating system
 
+# Ntp Sever Configuration
+$ntp_enabled ||= "True"
+$ntp_manage_config ||= "True"
+
 # Kubernetes Configuration
 $network_plugin ||= "calico"                   # CNI plugin (calico, flannel, etc.)
 $multi_networking ||= "False"                  # Enable Multus CNI for multi-networking
@@ -475,6 +479,8 @@ Vagrant.configure("2") do |config|
         "kubectl_localhost": "True",
         "local_path_provisioner_enabled": "#{$local_path_provisioner_enabled}",
         "local_path_provisioner_claim_root": "#{$local_path_provisioner_claim_root}",
+        "ntp_enabled": "#{$ntp_enabled}",
+        "ntp_manage_config": "#{$ntp_manage_config}",
         "helm_enabled": "True",
         "ansible_ssh_user": SUPPORTED_OS[$os][:user],
         "ansible_ssh_private_key_file": File.join(Dir.home, ".vagrant.d", "insecure_private_key"),
