@@ -92,8 +92,8 @@ $upm_ctl_instances = 1
 $time_zone = "Asia/Shanghai"
 
 # Ntp Sever Configuration
-$ntp_enabled = "True"
-$ntp_manage_config = "True"
+# $ntp_enabled = "True"
+# $ntp_manage_config = "True"
 
 # Operating system for VMs
 # Supported options: "ubuntu2004", "ubuntu2204", "centos7", "centos8", "rockylinux8", "rockylinux9", etc.
