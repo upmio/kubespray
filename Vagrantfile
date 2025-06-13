@@ -162,8 +162,7 @@ end
 if Vagrant.has_plugin?("vagrant-proxyconf")
   # Default no_proxy settings for common private networks
   $no_proxy = ENV['NO_PROXY'] || ENV['no_proxy'] || 
-              "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,::1,.bsgchina.com"
-  
+              "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,::1"
   # Add VM IPs to no_proxy list
   (1..$num_instances).each do |i|
     $no_proxy += ",#{$subnet}.#{i+$subnet_split4}"
@@ -483,6 +482,20 @@ Vagrant.configure("2") do |config|
         "preinstall_selinux_state": "disabled",
         "kube_version": "#{$kube_version}"
       }
+
+      # Add proxy configuration to host_vars if defined in config.rb
+      if defined?($http_proxy) && !$http_proxy.to_s.empty?
+        host_vars[vm_name]["http_proxy"] = $http_proxy
+      end
+      if defined?($https_proxy) && !$https_proxy.to_s.empty?
+        host_vars[vm_name]["https_proxy"] = $https_proxy
+      end
+      if defined?($no_proxy) && !$no_proxy.to_s.empty?
+        host_vars[vm_name]["no_proxy"] = $no_proxy
+      end
+      if defined?($additional_no_proxy) && !$additional_no_proxy.to_s.empty?
+        host_vars[vm_name]["additional_no_proxy"] = $additional_no_proxy
+      end
 
       # Display VM information for debugging
       puts "INFO: Configuring VM #{vm_name} with IP #{ip} (#{memory_size}MB RAM, #{cpu_num} CPUs)"
