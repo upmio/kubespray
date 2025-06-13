@@ -414,36 +414,8 @@ Vagrant.configure("2") do |config|
       # Set password for vagrant user
       node.vm.provision "shell", inline: "echo 'vagrant:#{$vagrant_pwd}' | sudo chpasswd"
 
-      # Setup Python for Ansible and create symlinks for Kubernetes CLI tools
+      # Create symlinks for Kubernetes CLI tools
       node.vm.provision "shell", privileged: true, inline: <<-SHELL
-        echo "INFO: Starting Python and CLI tools setup..."
-
-        # Install Python 3 and pip based on the package manager available
-        echo "INFO: Installing Python 3 and pip..."
-        if command -v dnf &> /dev/null; then
-          dnf install -y python3 python3-pip
-        elif command -v apt-get &> /dev/null; then
-          apt-get update && apt-get install -y python3 python3-pip
-        elif command -v zypper &> /dev/null; then
-          zypper install -y python3 python3-pip
-        else
-          echo "ERROR: Unsupported package manager. Cannot install Python3."
-          exit 1
-        fi
-        echo "INFO: Python 3 and pip installation completed."
-
-        # Create /usr/bin/python symlink for Ansible compatibility
-        echo "INFO: Configuring /usr/bin/python symlink..."
-        if ! command -v python &> /dev/null && command -v python3 &> /dev/null; then
-          PYTHON3_PATH=$(command -v python3)
-          echo "INFO: Creating symlink: $PYTHON3_PATH -> /usr/bin/python"
-          ln -sf "$PYTHON3_PATH" /usr/bin/python
-        elif command -v python &> /dev/null; then
-          echo "INFO: /usr/bin/python already exists. Skipping symlink creation."
-        else
-          echo "WARNING: python3 not found. Skipping /usr/bin/python symlink."
-        fi
-
         # Create symlinks for Kubernetes CLI tools
         echo "INFO: Creating symlinks for Kubernetes CLI tools..."
         declare -a k8s_tools=("kubectl" "helm" "nerdctl" "crictl")
@@ -453,7 +425,7 @@ Vagrant.configure("2") do |config|
           echo "INFO: Creating symlink: $source_path -> $target_path"
           ln -sf "$source_path" "$target_path"
         done
-        echo "INFO: Python and CLI tools setup completed successfully."
+        echo "INFO: Symlinks for Kubernetes CLI tools created successfully."
       SHELL
       # OS-specific configurations
       configure_os_specific_settings(node, config)
