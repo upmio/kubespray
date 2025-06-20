@@ -88,7 +88,7 @@ vagrant up
 
 - **Flatcar Container Linux by Kinvolk**
 - **Debian** Bookworm, Bullseye
-- **Ubuntu** 20.04, 22.04, 24.04
+- **Ubuntu** 22.04, 24.04
 - **CentOS/RHEL** [8, 9](docs/operating_systems/rhel.md#rhel-8)
 - **Fedora** 39, 40
 - **Fedora CoreOS** (see [fcos Note](docs/operating_systems/fcos.md))
@@ -111,7 +111,7 @@ Note:
 <!-- BEGIN ANSIBLE MANAGED BLOCK -->
 
 - Core
-  - [kubernetes](https://github.com/kubernetes/kubernetes) 1.33.1
+  - [kubernetes](https://github.com/kubernetes/kubernetes) 1.33.2
   - [etcd](https://github.com/etcd-io/etcd) 3.5.21
   - [docker](https://www.docker.com/) 28.0
   - [containerd](https://containerd.io/) 2.0.5
