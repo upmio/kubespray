@@ -179,20 +179,29 @@ end
 
 # Configure VM network based on network type
 def configure_vm_network(node, ip, instance_num)
-  network_options = {
-    ip: ip,
-    netmask: $netmask,
-    libvirt__guest_ipv6: 'yes',
-    libvirt__ipv6_address: "#{$subnet_ipv6}::#{instance_num+100}",
-    libvirt__ipv6_prefix: "64",
-    libvirt__forward_mode: "none",
-    libvirt__dhcp_enabled: false
-  }
-
   if $vm_network == "public_network"
-    network_options[:bridge] = $bridge_nic
+    # Public network (bridge mode) configuration
+    network_options = {
+      dev: $bridge_nic,
+      mode: "bridge",
+      type: "bridge",
+      ip: ip,
+      netmask: $netmask,
+      gateway: $gateway,
+      dns: [$dns_server]
+    }
     node.vm.network :public_network, **network_options
   else
+    # Private network configuration
+    network_options = {
+      ip: ip,
+      netmask: $netmask,
+      libvirt__guest_ipv6: 'yes',
+      libvirt__ipv6_address: "#{$subnet_ipv6}::#{instance_num+100}",
+      libvirt__ipv6_prefix: "64",
+      libvirt__forward_mode: "none",
+      libvirt__dhcp_enabled: false
+    }
     node.vm.network :private_network, **network_options
   end
 end
@@ -204,8 +213,11 @@ def configure_rocky_network(node)
       # Configure public network for Rocky Linux
       sudo nmcli connection modify "eth0" ipv4.gateway ""
       sudo nmcli connection modify "eth0" ipv4.never-default yes
+      
+      # Configure bridge network interface (eth1)
       sudo nmcli connection modify "System eth1" +ipv4.routes "0.0.0.0/0 #{$gateway}"
       sudo nmcli connection modify "System eth1" ipv4.gateway "#{$gateway}"
+      sudo nmcli connection modify "System eth1" ipv4.dns "#{$dns_server}"
       sudo nmcli connection up "eth0"
       sudo nmcli connection up "System eth1"
     SHELL
@@ -213,6 +225,7 @@ def configure_rocky_network(node)
     <<-SHELL
       # Configure private network for Rocky Linux
       sudo nmcli connection modify "System eth1" ipv4.gateway "#{$gateway}"
+      sudo nmcli connection modify "System eth1" ipv4.dns "#{$dns_server}"
       sudo nmcli connection up "System eth1"
     SHELL
   end
@@ -348,8 +361,9 @@ Vagrant.configure("2") do |config|
           # always make /dev/sd{a/b/c} so that CI can ensure that
           # virtualbox and libvirt will have the same devices to use for OSDs
           (1..$kube_node_instances_with_disks_number).each do |d|
-            disk_path = "#{disk_dir}/disk-#{i}-#{driverletters[d]}-#{$kube_node_instances_with_disk_suffix}.disk"
-            lv.storage :file, :device => "hd#{driverletters[d]}", :path => disk_path, :size => $kube_node_instances_with_disks_size, :bus => "scsi"
+            # Use relative path for libvirt compatibility
+            disk_filename = "disk-#{i}-#{driverletters[d]}-#{$kube_node_instances_with_disk_suffix}.disk"
+            lv.storage :file, :device => "hd#{driverletters[d]}", :path => disk_filename, :size => $kube_node_instances_with_disks_size, :bus => "scsi"
           end
         end
         node.vm.provider :virtualbox do |vb|
@@ -500,13 +514,6 @@ def configure_os_specific_settings(node, config)
     node.vm.provision "shell", 
                       inline: "sed -i '/net.ipv6.conf.all.disable_ipv6/d' /etc/sysctl.d/99-sysctl.conf /etc/sysctl.conf",
                       name: "Remove IPv6 sysctl disable settings"
-  end
-
-  # Configure UEFI for Rocky Linux systems
-  if ["rockylinux8", "rockylinux9"].include?($os)
-    config.vm.provider "libvirt" do |domain|
-      domain.loader = "/usr/share/OVMF/x64/OVMF_CODE.fd"
-    end
   end
 
   # Disable firewalld on RHEL-based systems
