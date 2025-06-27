@@ -120,3 +120,8 @@ tmp.md
 # Ansible collection files
 kubernetes_sigs-kubespray*tar.gz
 ansible_collections
+.serena/project.yml
+.serena/cache/python/document_symbols_cache_v23-06-25.pkl
+.serena/memories/kubespray_operations_best_practices.md
+.serena/memories/kubespray_project_overview.md
+.serena/memories/kubespray_technical_architecture.md
