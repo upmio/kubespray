@@ -43,9 +43,7 @@ set -eE
 #######################################
 # Constants and Configuration
 #######################################
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-readonly LOG_FILE="/tmp/${SCRIPT_NAME%.sh}.log"
+readonly LOG_FILE="/tmp/libvirt_kubespray_setup.log"
 readonly SCRIPT_VERSION="2.0"
 
 # System configuration constants
