@@ -69,9 +69,6 @@ PROJECT_DIR="${PROJECT_DIR:-$(pwd)/$(hostname)-kubespray}" # Use hostname as def
 PYTHON_VERSION="3.12.11"
 DEBUG="${DEBUG:-false}"
 
-# Command cache for performance
-declare -A command_cache
-
 #######################################
 # Logging Functions
 #######################################
